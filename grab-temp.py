@@ -3,32 +3,46 @@
 from bluepy import btle
 from struct import unpack
 import boto3
+from time import sleep
 
-mac = "FILL_THIS_IN"
+mac = "d8:a9:8B:75:43:2d"
 
-dev = btle.Peripheral(mac)
-readings = dev.readCharacteristic(40)
+while True:
 
-temperature_c, humidity = unpack("<HH",readings[0:4])
-temperature_f = 9.0/5.0 * temperature_c / 100 + 32
+    try:
+        dev = btle.Peripheral(mac)
+        readings = dev.readCharacteristic(40)
+    except Exception as e:
+        print("Error reading BTLE: {}".format(e))
+        continue
+    finally:
+        dev.disconnect()
 
-print("temperature is {}".format(temperature_f))
+    temperature_c, humidity = unpack("<HH",readings[0:4])
+    temperature_f = 9.0/5.0 * temperature_c / 100 + 32
 
-client = boto3.client('cloudwatch')
+    print("temperature is {}".format(temperature_f))
 
-response = client.put_metric_data(
-    Namespace='brewing',
-    MetricData=[
-        {
-            'MetricName': 'keezer',
-            'Dimensions': [
+    try:
+        client = boto3.client('cloudwatch')
+        response = client.put_metric_data(
+            Namespace='brewing',
+            MetricData=[
                 {
-                    'Name': 'temperature_f',
-                    'Value': 'degrees'
+                    'MetricName': 'keezer',
+                    'Dimensions': [
+                        {
+                            'Name': 'temperature_f',
+                            'Value': 'degrees'
+                        },
+                    ],
+                    'Value': temperature_f,
+                    'Unit': 'Count'
                 },
-            ],
-            'Value': temperature_f,
-            'Unit': 'Count'
-        },
-    ]
-)
+            ]
+        )
+    except Exception as e:
+        print("Error submitting metric: {}".format(e))
+        continue
+
+    sleep(30)
