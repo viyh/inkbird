@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+# Get values from Inkbird IBS-TH1 and submit to Cloudwatch
+
 from time import sleep
 from bluepy import btle
 import boto3
@@ -24,7 +26,7 @@ def get_readings():
         readings = dev.readCharacteristic(0x28)
     except Exception as e:
         logging.error("Error reading BTLE: {}".format(e))
-        continue
+        pass
     finally:
         dev.disconnect()
     return readings
@@ -50,7 +52,7 @@ def submit_metrics(temperature_f):
         )
     except Exception as e:
         logging.error("Error submitting metric: {}".format(e))
-        continue
+        pass
 
 while True:
     readings = get_readings()
