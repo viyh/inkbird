@@ -13,6 +13,7 @@ logging.basicConfig(
         datefmt='%Y-%m-%d %H:%M:%S')
 
 mac = "d8:a9:8B:75:43:2d"
+read_interval = 30
 
 def float_value(nums):
     return float((nums[1]<<8)|nums[0]) / 100
@@ -22,31 +23,24 @@ def c_to_f(temperature_c):
 
 def get_readings():
     try:
-        dev = btle.Peripheral(mac)
+        dev = btle.Peripheral(mac, addrType=btle.ADDR_TYPE_PUBLIC)
         readings = dev.readCharacteristic(0x28)
+        return readings
     except Exception as e:
         logging.error("Error reading BTLE: {}".format(e))
-        pass
-    finally:
-        dev.disconnect()
-    return readings
+        return False
 
-def submit_metrics(temperature_f):
+def submit_metric(namespace, metric_name, dimensions, value, unit='Count'):
     try:
         client = boto3.client('cloudwatch')
         response = client.put_metric_data(
-            Namespace='brewing',
+            Namespace=namespace,
             MetricData=[
                 {
-                    'MetricName': 'keezer',
-                    'Dimensions': [
-                        {
-                            'Name': 'temperature_f',
-                            'Value': 'degrees'
-                        },
-                    ],
-                    'Value': temperature_f,
-                    'Unit': 'Count'
+                    'MetricName': metric_name,
+                    'Dimensions': dimensions,
+                    'Value': value,
+                    'Unit': unit
                 },
             ]
         )
@@ -55,7 +49,11 @@ def submit_metrics(temperature_f):
         pass
 
 while True:
+    sleep(read_interval)
     readings = get_readings()
+    if not readings:
+        continue
+
     logging.debug("raw data: {}".format(readings))
 
     # little endian, first two bytes are temp_c, second two bytes are humidity
@@ -65,5 +63,7 @@ while True:
 
     logging.info("converted data: temperature_f[{:0.2f}], temperature_c[{:0.2f}], humidity[{:0.2f}]".format(temperature_f, temperature_c, humidity))
 
-    submit_metrics(temperature_f)
-    sleep(30)
+    if temperature_f > 100:
+        continue
+    submit_metric('brewing', 'temperature_f', [{'Name': 'Location', 'Value': 'keezer'}], temperature_f)
+    submit_metric('brewing', 'humidity', [{'Name': 'Location', 'Value': 'keezer'}], humidity)
