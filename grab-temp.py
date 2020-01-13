@@ -16,7 +16,11 @@ mac = "d8:a9:8B:75:43:2d"
 read_interval = 30
 
 def float_value(nums):
-    return float((nums[1]<<8)|nums[0]) / 100
+    # check if temp is negative
+    num = (nums[1]<<8)|nums[0]
+    if nums[1] == 0xff:
+        num = -( (num ^ 0xffff ) + 1)
+    return float(num) / 100
 
 def c_to_f(temperature_c):
     return 9.0/5.0 * temperature_c + 32
